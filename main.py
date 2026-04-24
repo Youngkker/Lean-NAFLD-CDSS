@@ -1,15 +1,14 @@
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 import joblib
 import pandas as pd
 import os
 
-# 1. 初始化系统
-app = FastAPI(title="瘦型脂肪肝预测模型后端")
+app = FastAPI(title="TabICL AI Engine")
 
-# 2. 允许网页跨域访问（必须要有）
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,20 +17,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 3. 挂载模型（请确保这个文件和您的 pkl 模型文件在同一个大目录下）
 MODEL_DIR = "Final_Clinical_Practicality_Arena"
-try:
-    print("⏳ 正在加载核心武器库...")
-    imputer = joblib.load(os.path.join(MODEL_DIR, "Imputer.pkl"))
-    scaler = joblib.load(os.path.join(MODEL_DIR, "Scaler.pkl"))
-    champion_model = joblib.load(os.path.join(MODEL_DIR, "Champion_Model.pkl"))
-    features = joblib.load(os.path.join(MODEL_DIR, "Features.pkl"))
-    print("✅ 武器库挂载成功！")
-except Exception as e:
-    print(f"❌ 模型加载失败，请检查路径: {e}")
+imputer = joblib.load(os.path.join(MODEL_DIR, "Imputer.pkl"))
+scaler = joblib.load(os.path.join(MODEL_DIR, "Scaler.pkl"))
+champion_model = joblib.load(os.path.join(MODEL_DIR, "Champion_Model.pkl"))
+features = joblib.load(os.path.join(MODEL_DIR, "Features.pkl")) 
 
-
-# 4. 定义输入格式
 class PatientData(BaseModel):
     ALT: float
     TG: float
@@ -39,27 +30,21 @@ class PatientData(BaseModel):
     UA: float
     Glucose: float
 
-
-# 5. 预测接口
 @app.post("/predict_nafld")
 async def predict_nafld(patient: PatientData):
     try:
-        input_dict = patient.dict()
-        input_df = pd.DataFrame([input_dict], columns=features)
+        input_df = pd.DataFrame([patient.dict()], columns=features)
         X_imp = imputer.transform(input_df)
         X_std = scaler.transform(X_imp)
         probability = champion_model.predict_proba(X_std)[0][1]
-
-        return {
-            "prediction": {
-                "risk_probability": f"{probability * 100:.1f}"
-            }
-        }
+        return {"prediction": {"risk_probability": f"{probability * 100:.1f}"}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# 🔥 把前端网页丢给访问者的核心代码
+@app.get("/")
+async def serve_frontend():
+    return FileResponse("index.html")
 
-# 🔥 核心改动：加上这句，您就可以直接在 PyCharm 点击绿色按钮运行了！
 if __name__ == "__main__":
-    print("🚀 正在启动 AI 引擎，请不要关闭此窗口...")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=10000)
