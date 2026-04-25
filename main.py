@@ -32,8 +32,9 @@ imputer = None
 scaler = None
 model = None
 features = None
+STARTUP_ERROR = "未知开机错误"
 
-# 加载模型
+# 加载模型 (捕获并保存开机报错)
 try:
     import tabicl
     imputer = joblib.load(os.path.join(MODEL_DIR, "Imputer.pkl"))
@@ -43,8 +44,11 @@ try:
     
     if HAS_TORCH and hasattr(model, 'eval'):
         model.eval()
+    STARTUP_ERROR = None # 加载成功则清空错误
 except Exception as e:
-    print(f"❌ 加载失败: {e}")
+    # 把真正的开机错误记下来！
+    STARTUP_ERROR = f"{type(e).__name__}: {str(e)}"
+    print(f"❌ 加载失败: {STARTUP_ERROR}")
 
 @app.get("/")
 async def read_index():
@@ -59,12 +63,15 @@ class PatientData(BaseModel):
 
 @app.post("/predict_nafld")
 async def predict_nafld(patient: PatientData):
+    # 🔥 如果开机就失败了，直接把真相弹到网页上！
+    if imputer is None or model is None:
+        return {"prediction": {"risk_probability": f"【模型根本没加载成功】真相是: {STARTUP_ERROR}"}}
+
     try:
         # 1. 准备数据
         input_data = patient.model_dump()
         input_df = pd.DataFrame([input_data])
         
-        # 🔥 防御性编程：自动修复 KeyError: None
         if features is not None:
             input_df = input_df[features]
             
@@ -76,7 +83,6 @@ async def predict_nafld(patient: PatientData):
         if HAS_TORCH:
             tensor_input = torch.tensor(X_std, dtype=torch.float32).unsqueeze(0)
             
-            # TabICL 通道
             if type(model).__name__ == 'TabICL' or hasattr(model, 'forward_with_cache'):
                 with torch.no_grad():
                     if getattr(model, "has_cache", False):
@@ -88,7 +94,6 @@ async def predict_nafld(patient: PatientData):
                 probability = output[0, 0, 1].item()
                 return {"prediction": {"risk_probability": f"{probability * 100:.1f}"}}
             
-            # 普通 Torch 模型
             try:
                 with torch.no_grad():
                     output = model(tensor_input)
@@ -99,7 +104,6 @@ async def predict_nafld(patient: PatientData):
             except Exception:
                 pass
                 
-        # 兼容传统机器学习模型
         if hasattr(model, "predict_proba"):
             probability = model.predict_proba(X_std)[0][1]
             return {"prediction": {"risk_probability": f"{probability * 100:.1f}"}}
@@ -107,17 +111,9 @@ async def predict_nafld(patient: PatientData):
         raise ValueError("无法解析此模型的输出结构！")
         
     except Exception as e:
-        # 🔥 超级雷达：精准定位崩溃位置
         tb = traceback.extract_tb(e.__traceback__)
-        if tb:
-            last_call = tb[-1]
-            error_location = f"{os.path.basename(last_call.filename)} 第 {last_call.lineno} 行"
-        else:
-            error_location = "未知位置"
-            
-        error_type = type(e).__name__
-        error_detail = str(e)
-        return {"prediction": {"risk_probability": f"【报错】{error_location} -> {error_type}: {error_detail}"}}
+        error_location = f"第 {tb[-1].lineno} 行" if tb else "未知位置"
+        return {"prediction": {"risk_probability": f"【预测时报错】{error_location} -> {type(e).__name__}: {str(e)}"}}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=10000)
