@@ -2,88 +2,53 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TabICL - Lean NAFLD CDSS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body { font-family: 'Inter', system-ui, sans-serif; background-color: #f4f7f6; }
-        .glass-card { background: #ffffff; border-radius: 1rem; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
-        .risk-bar { transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
-    </style>
 </head>
-<body class="text-gray-800 antialiased min-h-screen flex flex-col">
-
-<div id="app" class="flex flex-col min-h-screen">
-    <header class="bg-teal-900 text-white shadow-md">
-        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <div>
-                <h1 class="text-2xl font-bold tracking-tight">TabICL AI Engine</h1>
-                <p class="text-xs text-teal-100 font-medium">{{ t('subtitle') }}</p>
-            </div>
-            <button @click="toggleLang" class="bg-teal-800 hover:bg-teal-600 text-sm px-4 py-2 rounded-full font-semibold transition-colors">
-                {{ lang === 'zh' ? '🌐 Switch to English' : '🌐 切换至中文' }}
-            </button>
-        </div>
+<body class="bg-gray-100">
+<div id="app" class="max-w-4xl mx-auto py-10 px-4">
+    <header class="text-center mb-10">
+        <h1 class="text-3xl font-bold text-teal-900">TabICL AI Engine</h1>
+        <button @click="toggleLang" class="mt-2 text-sm text-teal-700 underline">{{ lang === 'zh' ? 'Switch to English' : '切换至中文' }}</button>
     </header>
-
-    <main class="flex-grow max-w-7xl mx-auto px-4 py-8 w-full grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div class="lg:col-span-6 glass-card p-6 border border-gray-100">
-            <h2 class="text-lg font-bold mb-6 pb-4 border-b border-gray-100">{{ t('inputTitle') }}</h2>
-            <div class="space-y-5">
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block text-sm font-semibold mb-1">{{ t('alt') }}</label><input v-model="form.ALT" type="number" class="w-full px-4 py-2.5 bg-gray-50 border rounded-lg"></div>
-                    <div><label class="block text-sm font-semibold mb-1">{{ t('tg') }}</label><input v-model="form.TG" type="number" step="0.01" class="w-full px-4 py-2.5 bg-gray-50 border rounded-lg"></div>
-                </div>
-                <div><label class="block text-sm font-semibold mb-1">{{ t('bmi') }} <span class="text-xs bg-red-100 text-red-600 px-2 rounded">{{ t('bmiTag') }}</span></label><input v-model="form.BMI" type="number" step="0.1" class="w-full px-4 py-2.5 bg-gray-50 border rounded-lg"></div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block text-sm font-semibold mb-1">{{ t('ua') }}</label><input v-model="form.UA" type="number" class="w-full px-4 py-2.5 bg-gray-50 border rounded-lg"></div>
-                    <div><label class="block text-sm font-semibold mb-1">{{ t('glu') }}</label><input v-model="form.Glucose" type="number" step="0.01" class="w-full px-4 py-2.5 bg-gray-50 border rounded-lg"></div>
-                </div>
-            </div>
-            <button @click="predict" :disabled="loading" class="mt-8 w-full bg-teal-600 hover:bg-teal-800 text-white font-bold py-3 rounded-xl transition-all">
-                {{ loading ? t('processing') : t('btnPredict') }}
-            </button>
+    
+    <div class="bg-white p-8 rounded-xl shadow-lg">
+        <div class="grid grid-cols-2 gap-4">
+            <input v-model="form.ALT" placeholder="ALT" class="border p-3 rounded">
+            <input v-model="form.TG" placeholder="TG" class="border p-3 rounded">
+            <input v-model="form.BMI" placeholder="BMI" class="border p-3 rounded">
+            <input v-model="form.UA" placeholder="UA" class="border p-3 rounded">
+            <input v-model="form.Glucose" placeholder="Glucose" class="border p-3 rounded">
         </div>
-
-        <div class="lg:col-span-6 glass-card p-6 border border-gray-100">
-            <h2 class="text-lg font-bold mb-6 pb-4 border-b border-gray-100">{{ t('resultTitle') }}</h2>
-            <div v-if="result" class="space-y-8">
-                <div class="text-center">
-                    <p class="text-sm font-semibold text-gray-500 uppercase">{{ t('probLabel') }}</p>
-                    <div class="text-7xl font-black tracking-tight" :class="isHighRisk ? 'text-red-600' : 'text-teal-600'">{{ numericProb }}%</div>
-                </div>
-                <div class="bg-blue-50 border-l-4 p-5 rounded-r-lg" :class="isHighRisk ? 'border-red-500 bg-red-50' : 'border-teal-500 bg-teal-50'">
-                    <h3 class="font-bold mb-2">{{ t('adviceLabel') }}</h3>
-                    <p class="text-sm">{{ isHighRisk ? t('adviceTextHigh') : t('adviceTextLow') }}</p>
-                </div>
-            </div>
-            <div v-else class="text-center text-gray-400 py-10">{{ t('waiting') }}</div>
+        <button @click="predict" class="w-full mt-6 bg-teal-600 text-white py-3 rounded font-bold hover:bg-teal-700">
+            {{ loading ? 'Analyzing...' : 'Predict' }}
+        </button>
+        <div v-if="result" class="mt-6 text-center text-2xl font-bold">
+            Risk: {{ result.prediction.risk_probability }}%
         </div>
-    </main>
+    </div>
 </div>
 
 <script>
-    const translations = {
-        en: { subtitle: 'Intelligent CDSS for Lean NAFLD', inputTitle: 'Clinical Features', alt: 'ALT (U/L)', tg: 'TG (mmol/L)', bmi: 'BMI (kg/m²)', bmiTag: 'Required < 25', ua: 'UA (μmol/L)', glu: 'FPG (mmol/L)', btnPredict: 'Execute Model Inference', processing: 'Analyzing...', resultTitle: 'TabICL Diagnostic Report', probLabel: 'Probability of Lean NAFLD', adviceLabel: 'Clinical Advice', adviceTextHigh: 'High risk detected. Immediate ultrasound imaging recommended.', adviceTextLow: 'Low risk. Maintain healthy lifestyle.', waiting: 'Enter indicators to get prediction.' },
-        zh: { subtitle: '瘦型非酒精性脂肪肝智能预测系统', inputTitle: '临床特征输入', alt: '谷丙转氨酶 (ALT)', tg: '甘油三酯 (TG)', bmi: '体质指数 (BMI)', bmiTag: '必填 < 25', ua: '血清尿酸 (UA)', glu: '空腹血糖 (FPG)', btnPredict: '执行大模型推理', processing: '深度解析中...', resultTitle: 'TabICL AI 诊断报告', probLabel: '瘦型脂肪肝发生概率', adviceLabel: '临床决策建议', adviceTextHigh: '存在高危风险，建议影像学进一步确认。', adviceTextLow: '目前代谢信号处于安全区间，建议继续保持健康生活方式。', waiting: '输入指标以获取预测' }
-    }
     Vue.createApp({
-        data() { return { lang: 'en', loading: false, result: null, numericProb: 0, form: { ALT: '', TG: '', BMI: '', UA: '', Glucose: '' } } },
-        computed: { isHighRisk() { return this.numericProb >= 50.0; } },
+        data() { return { lang: 'en', loading: false, result: null, form: { ALT: '', TG: '', BMI: '', UA: '', Glucose: '' } } },
         methods: {
-            t(key) { return translations[this.lang][key]; },
             toggleLang() { this.lang = this.lang === 'zh' ? 'en' : 'zh'; },
             async predict() {
                 this.loading = true;
-                const response = await fetch('http://127.0.0.1:8000/predict_nafld', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ALT: parseFloat(this.form.ALT), TG: parseFloat(this.form.TG), BMI: parseFloat(this.form.BMI), UA: parseFloat(this.form.UA), Glucose: parseFloat(this.form.Glucose) })
-                });
-                const data = await response.json();
-                this.result = data;
-                this.numericProb = parseFloat(data.prediction.risk_probability);
+                try {
+                    const response = await fetch('/predict_nafld', {
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            ALT: parseFloat(this.form.ALT), TG: parseFloat(this.form.TG), 
+                            BMI: parseFloat(this.form.BMI), UA: parseFloat(this.form.UA), 
+                            Glucose: parseFloat(this.form.Glucose) 
+                        })
+                    });
+                    this.result = await response.json();
+                } catch (e) { alert("Error"); }
                 this.loading = false;
             }
         }
