@@ -39,6 +39,10 @@ try:
     scaler = joblib.load(os.path.join(MODEL_DIR, "Scaler.pkl"))
     model = joblib.load(os.path.join(MODEL_DIR, "Champion_Model.pkl"))
     features = joblib.load(os.path.join(MODEL_DIR, "Features.pkl"))
+    
+    # 深度学习模型需进入评估模式
+    if HAS_TORCH and hasattr(model, 'eval'):
+        model.eval()
 except Exception as e:
     print(f"❌ 加载失败: {e}")
 
@@ -65,49 +69,43 @@ async def predict_nafld(patient: PatientData):
         X_std = scaler.transform(X_imp)
         
         # 3. 终极推理引擎
-        # 强制将输入转为 Tensor（因为这是 TabICL）
         if HAS_TORCH:
-            tensor_input = torch.tensor(X_std, dtype=torch.float32)
+            # 深度学习大模型需要 3D 张量输入: (Batch, Sequence, Features)
+            tensor_input = torch.tensor(X_std, dtype=torch.float32).unsqueeze(0)
             
-            # 方案 A: 尝试调用模型的 forward 拿原始 logits
+            # 🔥 专属 TabICL 模型的特别通道
+            if type(model).__name__ == 'TabICL' or hasattr(model, 'forward_with_cache'):
+                with torch.no_grad():
+                    # 检查模型是否保存了训练缓存 (In-Context Learning 需要上下文)
+                    if getattr(model, "has_cache", False):
+                        # return_logits=False 直接输出百分比概率
+                        output = model.forward_with_cache(X_test=tensor_input, use_cache=True, return_logits=False)
+                    else:
+                        # 如果没有缓存，我们给它伪造一个空的 y_train 占位符绕过报错
+                        y_train_dummy = torch.empty((1, 0), dtype=torch.long)
+                        output = model(X=tensor_input, y_train=y_train_dummy, return_logits=False)
+                
+                # TabICL 的输出格式通常是 (Batch, Test_Size, Classes) -> (1, 1, 2)
+                probability = output[0, 0, 1].item()
+                return {"prediction": {"risk_probability": f"{probability * 100:.1f}"}}
+            
+            # 兼容其他普通的 Torch 模型
             try:
                 with torch.no_grad():
                     output = model(tensor_input)
-                # 假设 output 是 [batch_size, num_classes] 的 logits
                 if hasattr(torch.nn.functional, 'softmax'):
-                    prob_tensor = torch.nn.functional.softmax(output, dim=1)
-                    # 取第 1 类的概率
-                    probability = prob_tensor[0][1].item()
+                    prob_tensor = torch.nn.functional.softmax(output, dim=-1)
+                    probability = prob_tensor.flatten()[1].item()
                     return {"prediction": {"risk_probability": f"{probability * 100:.1f}"}}
-            except Exception as forward_err:
-                pass # 如果 forward 报错，继续试下面的方法
+            except Exception:
+                pass
                 
-        # 方案 B: 使用它自带的 predict
-        if hasattr(model, "predict"):
-            res = model.predict(X_std)
-            # 如果是单个数值 (0 或 1)
-            if np.isscalar(res) or (isinstance(res, np.ndarray) and res.size == 1):
-                val = int(np.squeeze(res))
-                if val == 1:
-                    return {"prediction": {"risk_probability": "高风险 (99.0)"}}
-                else:
-                    return {"prediction": {"risk_probability": "低风险 (1.0)"}}
+        # 兼容传统机器学习模型
+        if hasattr(model, "predict_proba"):
+            probability = model.predict_proba(X_std)[0][1]
+            return {"prediction": {"risk_probability": f"{probability * 100:.1f}"}}
             
-            # 如果输出是个数组
-            elif isinstance(res, np.ndarray):
-                # 如果它是一个多维的概率数组 [0.2, 0.8]
-                if res.ndim > 1 and res.shape[1] > 1:
-                    probability = res[0][1]
-                    return {"prediction": {"risk_probability": f"{probability * 100:.1f}"}}
-                else:
-                    # 如果是一个一维的分类数组 [1]
-                    val = int(res[0])
-                    if val == 1:
-                        return {"prediction": {"risk_probability": "高风险 (99.0)"}}
-                    else:
-                        return {"prediction": {"risk_probability": "低风险 (1.0)"}}
-                        
-        raise ValueError("模型结构过于特殊，无法解析输出结果。")
+        raise ValueError("无法解析此模型的输出结构！")
         
     except Exception as e:
         error_type = type(e).__name__
