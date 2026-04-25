@@ -6,7 +6,14 @@ from pydantic import BaseModel
 import joblib
 import pandas as pd
 import os
-import traceback  # 引入追踪模块，抓取致命错误
+import traceback  
+
+# 🔥 终极补丁：强行导入您的自定义模块，让 joblib 认识这个外壳！
+try:
+    import tabicl
+    print("✅ 成功找到 tabicl 模块，准备解析大模型！")
+except ImportError:
+    print("⚠️ 警告：找不到 tabicl 模块！请确认您是否将 tabicl.py 上传到了 GitHub 根目录！")
 
 app = FastAPI(title="TabICL AI Engine")
 
