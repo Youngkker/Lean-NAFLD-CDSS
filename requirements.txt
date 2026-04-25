@@ -9,3 +9,4 @@ python-multipart
 einops
 psutil
 tqdm
+huggingface_hub
