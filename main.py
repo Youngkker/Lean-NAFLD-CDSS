@@ -1,3 +1,30 @@
+import os
+# 强行把所有底层运算限制为单线程，极致省内存！
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+
+import uvicorn
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+import joblib
+import pandas as pd
+import numpy as np
+import traceback
+
+try:
+    import torch
+    torch.set_num_threads(1)  # 🔥 限制 PyTorch 只用1个线程
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
+
+# ... 下面的代码保持之前的纯净版完全不变 ...
+
+
+
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
