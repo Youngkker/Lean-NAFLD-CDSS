@@ -4,5 +4,6 @@ pandas
 numpy
 scikit-learn
 joblib
-xgboost
-lightgbm
+torch
+torchvision
+torchaudio
