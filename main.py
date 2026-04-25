@@ -6,6 +6,7 @@ from pydantic import BaseModel
 import joblib
 import pandas as pd
 import os
+import traceback  # 引入追踪模块，抓取致命错误
 
 app = FastAPI(title="TabICL AI Engine")
 
@@ -17,11 +18,11 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# 🔥 核心防御机制：无论服务器怎么变，强行锁定当前文件所在的根目录
+# 强行锁定当前文件所在的绝对路径
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "Final_Clinical_Practicality_Arena")
 
-# 预先定义变量防止报错
+# 预先定义变量
 imputer = None
 scaler = None
 model = None
@@ -37,12 +38,11 @@ try:
     print("✅ 武器库挂载成功！模型加载完毕！")
 except Exception as e:
     print(f"❌ 致命错误：加载失败: {e}")
-    # 如果还是失败，把云端文件夹里到底有什么全都打印出来抓内鬼！
     print(f"🔍 当前根目录 {BASE_DIR} 下的文件有：", os.listdir(BASE_DIR))
     if os.path.exists(MODEL_DIR):
         print(f"📂 模型文件夹 {MODEL_DIR} 内部的文件有：", os.listdir(MODEL_DIR))
 
-# 托管网页：同样使用绝对路径保护
+# 托管网页静态文件
 @app.get("/")
 async def read_index():
     index_path = os.path.join(BASE_DIR, 'index.html')
@@ -70,7 +70,12 @@ async def predict_nafld(patient: PatientData):
         
         return {"prediction": {"risk_probability": f"{probability * 100:.1f}"}}
     except Exception as e:
-        print(f"⚠️ 推理时发生错误: {e}")
+        # 🔥 核心抓虫逻辑：打印详细的崩溃栈追踪
+        error_msg = traceback.format_exc()
+        print(f"\n{'='*40}")
+        print(f"⚠️ 预警！大模型推理时发生崩溃！")
+        print(f"详细错误日志如下:\n{error_msg}")
+        print(f"{'='*40}\n")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
