@@ -5,5 +5,5 @@ numpy
 scikit-learn
 joblib
 torch
-torchvision
-torchaudio
+python-multipart
+einops
