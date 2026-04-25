@@ -47,7 +47,7 @@ except Exception as e:
     print(f"❌ 加载失败: {STARTUP_ERROR}")
 
 @app.get("/")
-@app.head("/")  # 专门安抚 Render 的巡逻兵
+@app.head("/")
 async def read_index():
     return FileResponse(os.path.join(BASE_DIR, 'index.html'))
 
