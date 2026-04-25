@@ -6,18 +6,11 @@ from pydantic import BaseModel
 import joblib
 import pandas as pd
 import os
-import traceback  
-
-# 🔥 终极补丁：强行导入您的自定义模块，让 joblib 认识这个外壳！
-try:
-    import tabicl
-    print("✅ 成功找到 tabicl 模块，准备解析大模型！")
-except ImportError:
-    print("⚠️ 警告：找不到 tabicl 模块！请确认您是否将 tabicl.py 上传到了 GitHub 根目录！")
+import traceback
+import torch  # 🔥 必须引入 torch
 
 app = FastAPI(title="TabICL AI Engine")
 
-# 跨域配置
 app.add_middleware(
     CORSMiddleware, 
     allow_origins=["*"], 
@@ -25,35 +18,33 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# 强行锁定当前文件所在的绝对路径
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "Final_Clinical_Practicality_Arena")
 
-# 预先定义变量
 imputer = None
 scaler = None
 model = None
 features = None
 
-# 加载模型文件
+# 加载模型
 try:
-    print(f"⏳ 正在尝试从绝对路径加载模型: {MODEL_DIR}")
+    import tabicl
+    print("✅ 成功找到 tabicl 模块")
     imputer = joblib.load(os.path.join(MODEL_DIR, "Imputer.pkl"))
     scaler = joblib.load(os.path.join(MODEL_DIR, "Scaler.pkl"))
     model = joblib.load(os.path.join(MODEL_DIR, "Champion_Model.pkl"))
     features = joblib.load(os.path.join(MODEL_DIR, "Features.pkl"))
+    
+    # 🔥 深度学习模型必须进入评估模式
+    if hasattr(model, 'eval'):
+        model.eval()
     print("✅ 武器库挂载成功！模型加载完毕！")
 except Exception as e:
-    print(f"❌ 致命错误：加载失败: {e}")
-    print(f"🔍 当前根目录 {BASE_DIR} 下的文件有：", os.listdir(BASE_DIR))
-    if os.path.exists(MODEL_DIR):
-        print(f"📂 模型文件夹 {MODEL_DIR} 内部的文件有：", os.listdir(MODEL_DIR))
+    print(f"❌ 加载失败: {e}")
 
-# 托管网页静态文件
 @app.get("/")
 async def read_index():
-    index_path = os.path.join(BASE_DIR, 'index.html')
-    return FileResponse(index_path)
+    return FileResponse(os.path.join(BASE_DIR, 'index.html'))
 
 class PatientData(BaseModel):
     ALT: float
@@ -65,26 +56,43 @@ class PatientData(BaseModel):
 @app.post("/predict_nafld")
 async def predict_nafld(patient: PatientData):
     if model is None:
-        raise HTTPException(status_code=500, detail="模型未能成功加载，请检查后台日志。")
+        raise HTTPException(status_code=500, detail="Model not loaded")
     try:
-        # Pydantic V2 规范写法
-        input_df = pd.DataFrame([patient.model_dump()], columns=features)
+        # 1. 准备数据 (确保列顺序与训练时一致)
+        input_data = patient.model_dump()
+        input_df = pd.DataFrame([input_data])[features]
         
-        # 预处理与预测
+        # 2. 预处理
         X_imp = imputer.transform(input_df)
         X_std = scaler.transform(X_imp)
-        probability = model.predict_proba(X_std)[0][1]
         
-        return {"prediction": {"risk_probability": f"{probability * 100:.1f}"}}
+        # 3. 🔥 深度学习适配：转为 Torch 张量并调整维度
+        # 假设模型需要 (1, 1, Features) 的输入格式
+        x_tensor = torch.from_numpy(X_std).float()
+        if len(x_tensor.shape) == 2:
+            x_tensor = x_tensor.unsqueeze(1) # 变成 (1, 1, Features)
+            
+        # 4. 执行预测
+        with torch.no_grad():
+            # TabICL 通常需要一个空的 train_label 占位，或者直接 forward
+            # 这里我们尝试最通用的深度学习调用方式
+            output = model(x_tensor)
+            
+            # 如果输出是 logits，转为概率
+            if torch.max(output) > 1 or torch.min(output) < 0:
+                prob = torch.softmax(output, dim=-1)
+            else:
+                prob = output
+            
+            # 取出概率值 (假设是二分类，取索引 1)
+            risk_val = prob.flatten()[1].item()
+        
+        return {"prediction": {"risk_probability": f"{risk_val * 100:.1f}"}}
+        
     except Exception as e:
-        # 🔥 核心抓虫逻辑：打印详细的崩溃栈追踪
         error_msg = traceback.format_exc()
-        print(f"\n{'='*40}")
-        print(f"⚠️ 预警！大模型推理时发生崩溃！")
-        print(f"详细错误日志如下:\n{error_msg}")
-        print(f"{'='*40}\n")
+        print(f"\n⚠️ 推理崩溃详情:\n{error_msg}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    # Render 云端推荐配置
     uvicorn.run(app, host="0.0.0.0", port=10000)
