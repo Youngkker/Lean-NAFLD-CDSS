@@ -5,7 +5,7 @@ pandas
 numpy
 scikit-learn
 joblib
-torch
+torch==2.2.2
 python-multipart
 einops
 psutil
