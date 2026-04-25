@@ -60,7 +60,7 @@
 
     <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-
+            
             <div class="lg:col-span-6 glass-card p-6 border border-gray-100 no-print relative">
                 <div class="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
                     <h2 class="text-lg font-bold text-gray-800 flex items-center">
@@ -85,7 +85,7 @@
                             <input v-model="form.TG" type="number" step="0.01" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-medical-500 focus:border-medical-500 outline-none transition-all">
                         </div>
                     </div>
-
+                    
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">
                             {{ t('bmi') }} <span class="text-gray-400 font-normal">(kg/m²)</span>
@@ -141,7 +141,7 @@
                     </div>
 
                     <div v-if="result" class="space-y-8 animate-[fadeIn_0.5s_ease-out]">
-
+                        
                         <div class="text-center">
                             <p class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">{{ t('probLabel') }}</p>
                             <div class="text-7xl font-black tracking-tight" :class="isHighRisk ? 'text-red-600' : 'text-medical-600'">
@@ -176,7 +176,7 @@
                                 {{ isHighRisk ? t('adviceTextHigh') : t('adviceTextLow') }}
                             </p>
                         </div>
-
+                        
                     </div>
                 </div>
             </div>
@@ -287,7 +287,7 @@
 
                 // 2. 发起 API 请求
                 try {
-                   const response = await fetch('/predict_nafld', {
+                    const response = await fetch('/predict_nafld', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -299,19 +299,24 @@
                         })
                     });
 
-                    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                    // 🔥 这里的真话补丁：如果后端报错，网页会捕获并展示真实原因
+                    if (!response.ok) {
+                        const errData = await response.json();
+                        throw new Error(errData.detail || `API Error: ${response.status}`);
+                    }
+                    
                     const data = await response.json();
 
                     // 模拟大模型推理延迟，增强科技感
                     setTimeout(() => {
                         this.result = data;
-                        // 从后端的 "85.3%" 提取数字 85.3 用于画进度条
                         this.numericProb = parseFloat(data.prediction.risk_probability);
                         this.loading = false;
                     }, 800);
 
                 } catch (err) {
-                    this.error = this.lang === 'zh' ? "🔴 无法连接到本地 AI 后端引擎，请确认 uvicorn 是否已启动。" : "🔴 Failed to connect to the backend AI engine. Ensure uvicorn is running.";
+                    // 🔥 真实报错显示区域
+                    this.error = "🔴 AI 引擎报错: " + err.message;
                     this.loading = false;
                 }
             }
