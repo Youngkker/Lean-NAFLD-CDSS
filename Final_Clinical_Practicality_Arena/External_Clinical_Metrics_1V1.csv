@@ -1,9 +1,0 @@
-Model,Metric,Score
-👑 TabICL (Foundation Model),AUC,0.7226616587348833
-👑 TabICL (Foundation Model),Accuracy,0.7224906065485776
-👑 TabICL (Foundation Model),Sensitivity,0.5521327014218009
-👑 TabICL (Foundation Model),Specificity,0.7723802914642609
-Traditional HSI (>30 cut-off),AUC,0.6602535429911429
-Traditional HSI (>30 cut-off),Accuracy,0.5780998389694042
-Traditional HSI (>30 cut-off),Sensitivity,0.6729857819905213
-Traditional HSI (>30 cut-off),Specificity,0.5503122831367107
