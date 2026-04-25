@@ -9,7 +9,6 @@ import numpy as np
 import os
 import traceback
 
-# 尝试导入 torch
 try:
     import torch
     HAS_TORCH = True
@@ -34,7 +33,7 @@ model = None
 features = None
 STARTUP_ERROR = "未知开机错误"
 
-# 加载模型 (捕获并保存开机报错)
+# 加载深度学习模型
 try:
     import tabicl
     imputer = joblib.load(os.path.join(MODEL_DIR, "Imputer.pkl"))
@@ -44,9 +43,8 @@ try:
     
     if HAS_TORCH and hasattr(model, 'eval'):
         model.eval()
-    STARTUP_ERROR = None # 加载成功则清空错误
+    STARTUP_ERROR = None 
 except Exception as e:
-    # 把真正的开机错误记下来！
     STARTUP_ERROR = f"{type(e).__name__}: {str(e)}"
     print(f"❌ 加载失败: {STARTUP_ERROR}")
 
@@ -63,23 +61,20 @@ class PatientData(BaseModel):
 
 @app.post("/predict_nafld")
 async def predict_nafld(patient: PatientData):
-    # 🔥 如果开机就失败了，直接把真相弹到网页上！
     if imputer is None or model is None:
-        return {"prediction": {"risk_probability": f"【模型根本没加载成功】真相是: {STARTUP_ERROR}"}}
+        return {"prediction": {"risk_probability": f"【模型加载失败】: {STARTUP_ERROR}"}}
 
     try:
-        # 1. 准备数据
         input_data = patient.model_dump()
         input_df = pd.DataFrame([input_data])
         
         if features is not None:
             input_df = input_df[features]
             
-        # 2. 预处理
         X_imp = imputer.transform(input_df)
         X_std = scaler.transform(X_imp)
         
-        # 3. 终极推理引擎
+        # 专属 TabICL 推理
         if HAS_TORCH:
             tensor_input = torch.tensor(X_std, dtype=torch.float32).unsqueeze(0)
             
@@ -108,12 +103,12 @@ async def predict_nafld(patient: PatientData):
             probability = model.predict_proba(X_std)[0][1]
             return {"prediction": {"risk_probability": f"{probability * 100:.1f}"}}
             
-        raise ValueError("无法解析此模型的输出结构！")
+        raise ValueError("无法解析输出结构！")
         
     except Exception as e:
         tb = traceback.extract_tb(e.__traceback__)
-        error_location = f"第 {tb[-1].lineno} 行" if tb else "未知位置"
-        return {"prediction": {"risk_probability": f"【预测时报错】{error_location} -> {type(e).__name__}: {str(e)}"}}
+        error_location = f"第 {tb[-1].lineno} 行" if tb else "未知"
+        return {"prediction": {"risk_probability": f"【报错】{error_location} -> {type(e).__name__}: {str(e)}"}}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=10000)
