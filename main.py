@@ -7,6 +7,7 @@ import joblib
 import pandas as pd
 import numpy as np
 import os
+import traceback
 
 # 尝试导入 torch
 try:
@@ -40,7 +41,6 @@ try:
     model = joblib.load(os.path.join(MODEL_DIR, "Champion_Model.pkl"))
     features = joblib.load(os.path.join(MODEL_DIR, "Features.pkl"))
     
-    # 深度学习模型需进入评估模式
     if HAS_TORCH and hasattr(model, 'eval'):
         model.eval()
 except Exception as e:
@@ -62,34 +62,33 @@ async def predict_nafld(patient: PatientData):
     try:
         # 1. 准备数据
         input_data = patient.model_dump()
-        input_df = pd.DataFrame([input_data])[features]
+        input_df = pd.DataFrame([input_data])
         
+        # 🔥 防御性编程：自动修复 KeyError: None
+        if features is not None:
+            input_df = input_df[features]
+            
         # 2. 预处理
         X_imp = imputer.transform(input_df)
         X_std = scaler.transform(X_imp)
         
         # 3. 终极推理引擎
         if HAS_TORCH:
-            # 深度学习大模型需要 3D 张量输入: (Batch, Sequence, Features)
             tensor_input = torch.tensor(X_std, dtype=torch.float32).unsqueeze(0)
             
-            # 🔥 专属 TabICL 模型的特别通道
+            # TabICL 通道
             if type(model).__name__ == 'TabICL' or hasattr(model, 'forward_with_cache'):
                 with torch.no_grad():
-                    # 检查模型是否保存了训练缓存 (In-Context Learning 需要上下文)
                     if getattr(model, "has_cache", False):
-                        # return_logits=False 直接输出百分比概率
                         output = model.forward_with_cache(X_test=tensor_input, use_cache=True, return_logits=False)
                     else:
-                        # 如果没有缓存，我们给它伪造一个空的 y_train 占位符绕过报错
                         y_train_dummy = torch.empty((1, 0), dtype=torch.long)
                         output = model(X=tensor_input, y_train=y_train_dummy, return_logits=False)
                 
-                # TabICL 的输出格式通常是 (Batch, Test_Size, Classes) -> (1, 1, 2)
                 probability = output[0, 0, 1].item()
                 return {"prediction": {"risk_probability": f"{probability * 100:.1f}"}}
             
-            # 兼容其他普通的 Torch 模型
+            # 普通 Torch 模型
             try:
                 with torch.no_grad():
                     output = model(tensor_input)
@@ -108,9 +107,17 @@ async def predict_nafld(patient: PatientData):
         raise ValueError("无法解析此模型的输出结构！")
         
     except Exception as e:
+        # 🔥 超级雷达：精准定位崩溃位置
+        tb = traceback.extract_tb(e.__traceback__)
+        if tb:
+            last_call = tb[-1]
+            error_location = f"{os.path.basename(last_call.filename)} 第 {last_call.lineno} 行"
+        else:
+            error_location = "未知位置"
+            
         error_type = type(e).__name__
         error_detail = str(e)
-        return {"prediction": {"risk_probability": f"【后台报错】{error_type}: {error_detail}"}}
+        return {"prediction": {"risk_probability": f"【报错】{error_location} -> {error_type}: {error_detail}"}}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=10000)
