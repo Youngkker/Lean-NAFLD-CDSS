@@ -39,7 +39,7 @@ try:
     scaler = joblib.load(os.path.join(MODEL_DIR, "Scaler.pkl"))
     model = joblib.load(os.path.join(MODEL_DIR, "Champion_Model.pkl"))
     features = joblib.load(os.path.join(MODEL_DIR, "Features.pkl"))
-    
+
     if HAS_TORCH and hasattr(model, 'eval'):
         model.eval()
 except Exception as e:
@@ -66,17 +66,17 @@ async def predict_nafld(patient: PatientData):
     try:
         input_data = patient.model_dump()
         input_df = pd.DataFrame([input_data])
-        
+
         if features is not None:
             available_cols = [f for f in features if f in input_df.columns]
             input_df = input_df[available_cols]
-            
+
         X_imp = imputer.transform(input_df)
         X_std = scaler.transform(X_imp)
-        
+
         if HAS_TORCH:
             tensor_input = torch.tensor(X_std, dtype=torch.float32).unsqueeze(0)
-            
+
             if type(model).__name__ == 'TabICL' or hasattr(model, 'forward_with_cache'):
                 with torch.no_grad():
                     if getattr(model, "has_cache", False):
@@ -84,10 +84,10 @@ async def predict_nafld(patient: PatientData):
                     else:
                         y_train_dummy = torch.empty((1, 0), dtype=torch.long)
                         output = model(X=tensor_input, y_train=y_train_dummy, return_logits=False)
-                
+
                 probability = output[0, 0, 1].item()
                 return {"prediction": {"risk_probability": f"{probability * 100:.1f}"}}
-            
+
             try:
                 with torch.no_grad():
                     output = model(tensor_input)
@@ -97,13 +97,13 @@ async def predict_nafld(patient: PatientData):
                     return {"prediction": {"risk_probability": f"{probability * 100:.1f}"}}
             except Exception:
                 pass
-                
+
         if hasattr(model, "predict_proba"):
             probability = model.predict_proba(X_std)[0][1]
             return {"prediction": {"risk_probability": f"{probability * 100:.1f}"}}
-            
+
         raise ValueError("无法解析此模型的输出结构！")
-        
+
     except Exception as e:
         tb = traceback.extract_tb(e.__traceback__)
         error_location = f"第 {tb[-1].lineno} 行" if tb else "未知位置"
