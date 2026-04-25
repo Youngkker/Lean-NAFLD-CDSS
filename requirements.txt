@@ -2,10 +2,10 @@
 fastapi
 uvicorn
 pandas
-numpy
-scikit-learn
+numpy==2.3.5
+scikit-learn==1.7.2
 joblib
-torch==2.2.2
+torch==2.10.0+cpu
 python-multipart
 einops
 psutil
